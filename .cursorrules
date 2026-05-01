@@ -1,0 +1,46 @@
+# Project: Inbox AI
+
+## Stack
+- Next.js 14 with App Router and TypeScript
+- Supabase (Postgres + auth)
+- pgvector for embeddings
+- NextAuth.js for Google OAuth
+- Anthropic SDK for Claude
+- OpenAI SDK for embeddings only
+- Inngest for background jobs
+- Tailwind CSS for styling, shadcn/ui for components
+
+## Conventions
+- All API routes under /app/api, use Route Handlers (not pages/api)
+- All database access goes through /lib/db/, never inline SQL in components
+- All Gmail API calls go through /lib/gmail.ts wrapper
+- Use Zod for input validation on all API routes
+- Errors: throw typed errors with descriptive messages, log via console.error, return user-friendly messages to UI
+- Never log email body content; log only metadata (message ID, user ID, action)
+- All async operations use async/await, never .then chains
+- Components: prefer server components, mark client components explicitly with 'use client'
+
+## File structure
+/app
+  /api
+    /auth/[...nextauth]
+    /sync (start sync)
+    /search (query endpoint)
+    /threads/[id] (thread detail)
+  /(app)
+    /search (main app page)
+    /thread/[id] (thread detail page)
+  /landing (logged-out home)
+/lib
+  /db (database client and queries)
+  /gmail.ts (Gmail API wrapper)
+  /llm.ts (Claude wrapper)
+  /embeddings.ts (OpenAI wrapper)
+/inngest
+  /sync.ts (background sync job)
+
+## Security non-negotiables
+- Encrypt refresh tokens before storing
+- Use Supabase RLS policies on all tables
+- All user-data queries must include user_id filter
+- Never expose Gmail message bodies in API responses to users other than the owner
