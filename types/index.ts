@@ -1,0 +1,95 @@
+export type SyncStatus = "pending" | "in_progress" | "complete" | "failed";
+
+export interface User {
+  id: string;
+  email: string;
+  name: string | null;
+  image: string | null;
+  last_sync_at: string | null;
+  last_history_id: string | null;
+  sync_status: SyncStatus;
+  sync_progress_count: number;
+  sync_progress_total: number;
+  created_at: string;
+}
+
+export interface Email {
+  id: string;
+  user_id: string;
+  gmail_message_id: string;
+  thread_id: string;
+  subject: string | null;
+  from_address: string | null;
+  from_name: string | null;
+  to_addresses: string[];
+  cc_addresses: string[];
+  date: string | null;
+  body_text: string | null;
+  body_summary: string | null;
+  has_attachments: boolean;
+  labels: string[];
+  created_at: string;
+}
+
+export interface ParsedEmail {
+  gmail_message_id: string;
+  thread_id: string;
+  subject: string | null;
+  from_address: string | null;
+  from_name: string | null;
+  to_addresses: string[];
+  cc_addresses: string[];
+  date: string | null;
+  body_text: string;
+  has_attachments: boolean;
+  labels: string[];
+}
+
+export interface Thread {
+  id: string;
+  user_id: string;
+  gmail_thread_id: string;
+  subject: string | null;
+  participant_emails: string[];
+  message_count: number;
+  first_message_date: string | null;
+  last_message_date: string | null;
+  thread_summary: string | null;
+  summary_generated_at: string | null;
+}
+
+export interface ThreadWithEmails extends Thread {
+  emails: Email[];
+}
+
+export interface SearchCitation {
+  id: string;
+  gmail_message_id: string;
+  thread_id: string;
+  subject: string | null;
+  from_name: string | null;
+  from_address: string | null;
+  date: string | null;
+  snippet: string;
+  similarity: number;
+}
+
+export interface SearchResult {
+  queryId: string;
+  answer: string;
+  citations: SearchCitation[];
+}
+
+export interface QueryFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  senderDomain?: string;
+  hasAttachments?: boolean;
+}
+
+export interface SyncStatusResponse {
+  status: SyncStatus;
+  count: number;
+  total: number;
+  lastSyncAt: string | null;
+}
