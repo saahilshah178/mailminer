@@ -4,7 +4,23 @@ import { upsertUser } from "@/lib/db/users";
 
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
+function resolveAuthSecret(): string {
+  const fromEnv = process.env.AUTH_SECRET ?? process.env.NEXTAUTH_SECRET;
+  if (fromEnv) return fromEnv;
+  if (process.env.NODE_ENV !== "production") {
+    return "dev-only-placeholder-set-auth-secret-in-env-local";
+  }
+  // `next build` runs route workers with NODE_ENV=production; argv may not include "build".
+  console.error(
+    "[auth] AUTH_SECRET is unset. Sessions are insecure until you set AUTH_SECRET (see .env.example).",
+  );
+  return "insecure-placeholder-you-must-set-auth-secret";
+}
+
+const authSecret = resolveAuthSecret();
+
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  secret: authSecret,
   // Required for Auth.js on localhost and behind proxies; avoids generic "server configuration" errors.
   trustHost: true,
   providers: [
@@ -54,12 +70,15 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         return token;
       }
 
-      if (token.expires_at && Date.now() < token.expires_at * 1000) {
+      const expAt = token.expires_at;
+      if (typeof expAt === "number" && Date.now() < expAt * 1000) {
         return token;
       }
 
       // Token expired — try to refresh.
-      if (!token.refresh_token) {
+      const refreshToken =
+        typeof token.refresh_token === "string" ? token.refresh_token : undefined;
+      if (!refreshToken) {
         token.error = "RefreshTokenError";
         return token;
       }
@@ -71,7 +90,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             client_id: process.env.AUTH_GOOGLE_ID ?? "",
             client_secret: process.env.AUTH_GOOGLE_SECRET ?? "",
             grant_type: "refresh_token",
-            refresh_token: token.refresh_token,
+            refresh_token: refreshToken,
           }),
         });
         const tokens = (await res.json()) as {
@@ -92,14 +111,16 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       }
     },
     async session({ session, token }) {
-      if (token.userId) {
-        session.user.id = token.userId;
+      const userId = token.userId;
+      if (typeof userId === "string") {
+        session.user.id = userId;
       }
-      if (token.access_token) {
-        session.accessToken = token.access_token;
+      const accessToken = token.access_token;
+      if (typeof accessToken === "string") {
+        session.accessToken = accessToken;
       }
-      if (token.error) {
-        session.error = token.error;
+      if (token.error === "RefreshTokenError") {
+        session.error = "RefreshTokenError";
       }
       return session;
     },
