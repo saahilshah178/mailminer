@@ -9,7 +9,12 @@ import type { SyncStatusResponse } from "@/types";
 const POLL_INTERVAL_MS = 5000;
 const MIN_USABLE_COUNT = 1000;
 
-export function SyncProgress() {
+export interface SyncProgressProps {
+  /** When true, don't auto-redirect to /inbox once status flips to complete. */
+  stayOnComplete?: boolean;
+}
+
+export function SyncProgress({ stayOnComplete }: SyncProgressProps = {}) {
   const router = useRouter();
   const [status, setStatus] = useState<SyncStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -23,8 +28,8 @@ export function SyncProgress() {
         if (!res.ok) throw new Error("Failed to fetch sync status");
         const data = (await res.json()) as SyncStatusResponse;
         if (!cancelled) setStatus(data);
-        if (data.status === "complete") {
-          router.replace("/search");
+        if (data.status === "complete" && !stayOnComplete) {
+          router.replace("/inbox");
         }
       } catch (err) {
         if (!cancelled) setError((err as Error).message);
@@ -36,7 +41,7 @@ export function SyncProgress() {
       cancelled = true;
       clearInterval(id);
     };
-  }, [router]);
+  }, [router, stayOnComplete]);
 
   async function startSync() {
     setStarting(true);
@@ -44,6 +49,12 @@ export function SyncProgress() {
     try {
       const res = await fetch("/api/sync", { method: "POST" });
       if (!res.ok) throw new Error("Failed to start sync");
+      // Optimistically reflect the kicked-off state.
+      setStatus((prev) =>
+        prev
+          ? { ...prev, status: "in_progress" }
+          : { status: "in_progress", count: 0, total: 0, lastSyncAt: null },
+      );
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -58,12 +69,14 @@ export function SyncProgress() {
   const total = status.total > 0 ? status.total : Math.max(status.count, 1);
   const pct = Math.min(100, Math.round((status.count / total) * 100));
   const canTry = status.count >= MIN_USABLE_COUNT;
+  const isWorking = status.status === "in_progress" || status.status === "pending";
+  const isComplete = status.status === "complete";
 
   return (
     <div className="space-y-4">
       <div>
         <div className="flex items-baseline justify-between text-sm">
-          <span className="font-medium">
+          <span className="font-medium text-[#202124]">
             {status.status === "complete"
               ? "Sync complete"
               : status.status === "in_progress"
@@ -72,19 +85,27 @@ export function SyncProgress() {
                   ? "Sync failed"
                   : "Preparing sync"}
           </span>
-          <span className="text-muted-foreground">
+          <span className="text-[#5f6368]">
             {status.count.toLocaleString()}
-            {status.total > 0 && ` of ~${status.total.toLocaleString()}`}
+            {status.total > 0 && status.status !== "complete" && ` of ~${status.total.toLocaleString()}`}
+            {status.status === "complete" && " emails indexed"}
           </span>
         </div>
-        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-muted">
+        <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-[#e8eaed]">
           <div
-            className="h-full bg-primary transition-all"
-            style={{ width: `${pct}%` }}
+            className="h-full bg-[#0b57d0] transition-all"
+            style={{ width: isComplete ? "100%" : `${pct}%` }}
             aria-valuenow={pct}
             role="progressbar"
           />
         </div>
+        {isWorking && (
+          <p className="mt-2 text-xs text-[#5f6368]">
+            We&apos;re fetching every message in your Gmail account, including Sent, Spam,
+            and Trash. You can keep using the inbox while we work — newly indexed messages
+            appear here automatically.
+          </p>
+        )}
       </div>
 
       {status.status === "pending" && (
@@ -99,15 +120,27 @@ export function SyncProgress() {
         </Button>
       )}
 
-      {canTry && status.status !== "complete" && (
-        <Link href="/search">
-          <Button variant="secondary">Try a query now</Button>
+      {isComplete && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/inbox">
+            <Button>Open inbox</Button>
+          </Link>
+          <Button onClick={startSync} disabled={starting} variant="outline">
+            {starting ? "Restarting…" : "Resync entire inbox"}
+          </Button>
+          <span className="text-xs text-[#5f6368]">
+            Re-runs the full backfill and adds anything we missed.
+          </span>
+        </div>
+      )}
+
+      {canTry && isWorking && (
+        <Link href="/inbox">
+          <Button variant="secondary">Open inbox now</Button>
         </Link>
       )}
 
-      {error && (
-        <p className="text-sm text-destructive">{error}</p>
-      )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   );
 }

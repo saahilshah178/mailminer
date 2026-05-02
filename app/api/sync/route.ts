@@ -17,13 +17,16 @@ export async function POST() {
     if (user.sync_status === "in_progress") {
       return NextResponse.json({ ok: true, status: "in_progress" });
     }
-    await setSyncStatus(userId, "pending", { count: 0, total: 0 });
+    // Mark in_progress immediately so the UI flips off "complete" and the
+    // sidebar's banner appears. The Inngest function is the source of truth
+    // and will keep it in_progress as it pages.
+    await setSyncStatus(userId, "in_progress", { count: 0, total: 0 });
     await inngest.send({
       name: "app/sync.requested",
       data: { userId, mode: "initial" },
     });
     console.info("sync.requested", { userId });
-    return NextResponse.json({ ok: true, status: "pending" });
+    return NextResponse.json({ ok: true, status: "in_progress" });
   } catch (err) {
     console.error("POST /api/sync failed", { userId, error: (err as Error).message });
     return NextResponse.json({ error: "Failed to start sync" }, { status: 500 });

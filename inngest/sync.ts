@@ -12,18 +12,26 @@ import {
   setLastHistoryId,
   setSyncStatus,
 } from "@/lib/db/users";
-import { bulkUpsertEmails, updateEmbeddings } from "@/lib/db/emails";
+import {
+  bulkUpsertEmails,
+  getExistingGmailMessageIds,
+  updateEmbeddings,
+} from "@/lib/db/emails";
 import { rebuildThreadsForUser } from "@/lib/db/threads";
 
 const PAGE_SIZE = 500;
-const FETCH_CONCURRENCY = 10;
-const TWO_YEARS_DAYS = 730;
+const FETCH_CONCURRENCY = 20;
 
 /**
- * Initial backfill — capped at the last 2 years per PDD §4.
+ * Initial backfill — pulls the user's ENTIRE Gmail mailbox (no time cap),
+ * including Spam and Trash, so every label view in the app is populated.
  *
  * Triggered by `app/sync.requested`. Runs in steps so retries are durable
  * and progress is observable in the dashboard.
+ *
+ * Re-running this function for the same user is safe: messages we've already
+ * stored are skipped (no Gmail.get + no embedding), so a "resync" cleanly
+ * fetches just the missing messages.
  */
 export const initialSync = inngest.createFunction(
   {
@@ -54,11 +62,10 @@ export const initialSync = inngest.createFunction(
       return await getCurrentHistoryId(gmail);
     });
 
-    const query = `newer_than:${TWO_YEARS_DAYS}d`;
-
     let pageToken: string | null = null;
     let pageIndex = 0;
     let totalProcessed = 0;
+    let totalSkipped = 0;
     let totalEstimate = 0;
 
     do {
@@ -66,15 +73,24 @@ export const initialSync = inngest.createFunction(
         const gmail = getGmailClient(refreshToken);
         const page = await listMessageIds(gmail, {
           pageToken: pageToken ?? undefined,
-          query,
           maxResults: PAGE_SIZE,
+          includeSpamTrash: true,
         });
         if (totalEstimate === 0) totalEstimate = page.resultSizeEstimate;
 
         if (page.ids.length === 0) {
-          return { processed: 0, nextPageToken: page.nextPageToken };
+          return { processed: 0, skipped: 0, nextPageToken: page.nextPageToken };
         }
-        const messages = await fetchMessagesInBatches(gmail, page.ids, FETCH_CONCURRENCY);
+
+        // Skip messages we already have stored — biggest win for resyncs.
+        const existing = await getExistingGmailMessageIds(userId, page.ids);
+        const idsToFetch = page.ids.filter((id) => !existing.has(id));
+        const skipped = page.ids.length - idsToFetch.length;
+        if (idsToFetch.length === 0) {
+          return { processed: 0, skipped, nextPageToken: page.nextPageToken };
+        }
+
+        const messages = await fetchMessagesInBatches(gmail, idsToFetch, FETCH_CONCURRENCY);
         const parsed = messages
           .map(parseGmailMessage)
           .filter((p): p is NonNullable<typeof p> => Boolean(p));
@@ -98,17 +114,23 @@ export const initialSync = inngest.createFunction(
           await updateEmbeddings(userId, rows);
         }
 
-        return { processed: parsed.length, nextPageToken: page.nextPageToken };
+        return {
+          processed: parsed.length,
+          skipped,
+          nextPageToken: page.nextPageToken,
+        };
       });
 
       totalProcessed += result.processed;
+      totalSkipped += result.skipped;
       pageToken = result.nextPageToken;
       pageIndex++;
 
       await step.run(`update-progress-${pageIndex}`, async () => {
+        const stored = totalProcessed + totalSkipped;
         await setSyncStatus(userId, "in_progress", {
-          count: totalProcessed,
-          total: Math.max(totalEstimate, totalProcessed),
+          count: stored,
+          total: Math.max(totalEstimate, stored),
         });
       });
     } while (pageToken);
@@ -122,12 +144,13 @@ export const initialSync = inngest.createFunction(
     });
 
     await step.run("mark-complete", async () => {
+      const stored = totalProcessed + totalSkipped;
       await setSyncStatus(userId, "complete", {
-        count: totalProcessed,
-        total: totalProcessed,
+        count: stored,
+        total: stored,
       });
     });
 
-    return { userId, processed: totalProcessed };
+    return { userId, processed: totalProcessed, skipped: totalSkipped };
   },
 );

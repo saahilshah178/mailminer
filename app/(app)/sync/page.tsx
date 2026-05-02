@@ -1,6 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
 import { SyncProgress } from "@/components/sync-progress";
+import { getEmailCountForUser } from "@/lib/db/emails";
 import { getUserById, setSyncStatus } from "@/lib/db/users";
 import { inngest } from "@/inngest/client";
 
@@ -14,7 +15,6 @@ export default async function SyncPage() {
   const user = await getUserById(userId);
   if (!user) redirect("/");
 
-  // Auto-kick the initial sync the first time the user lands here.
   if (user.sync_status === "pending") {
     try {
       await setSyncStatus(userId, "in_progress", { count: 0, total: 0 });
@@ -28,20 +28,28 @@ export default async function SyncPage() {
     }
   }
 
-  if (user.sync_status === "complete") {
-    redirect("/search");
-  }
+  const stored = await getEmailCountForUser(userId).catch(() => 0);
 
   return (
-    <div className="mx-auto max-w-xl space-y-6">
+    <div className="mx-auto w-full max-w-2xl overflow-y-auto px-6 py-10">
       <div className="space-y-2">
-        <h1 className="text-2xl font-semibold tracking-tight">Setting up your inbox</h1>
-        <p className="text-sm text-muted-foreground">
-          We&apos;re processing your emails. You can start using the app once at least 1,000 are
-          indexed.
+        <h1 className="text-2xl font-semibold tracking-tight text-[#202124]">
+          Inbox sync
+        </h1>
+        <p className="text-sm text-[#5f6368]">
+          Inbox AI keeps a local copy of your Gmail messages so the inbox renders
+          instantly and AI search can run over everything. We pull every message,
+          including Sent, Spam, and Trash, with no time limit.
         </p>
+        {stored > 0 && (
+          <p className="text-xs text-[#5f6368]">
+            Currently indexed: <span className="font-medium text-[#202124]">{stored.toLocaleString()}</span> messages.
+          </p>
+        )}
       </div>
-      <SyncProgress />
+      <div className="mt-6">
+        <SyncProgress stayOnComplete />
+      </div>
     </div>
   );
 }

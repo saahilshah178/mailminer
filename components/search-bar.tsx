@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -16,10 +16,10 @@ export function SearchBar({ initialQuery = "" }: SearchBarProps) {
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<SearchResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const autoRanRef = useRef(false);
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
-    if (!query.trim() || loading) return;
+  async function runQuery(text: string) {
+    if (!text.trim() || loading) return;
     setLoading(true);
     setError(null);
     setResult(null);
@@ -27,7 +27,7 @@ export function SearchBar({ initialQuery = "" }: SearchBarProps) {
       const res = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query: query.trim() }),
+        body: JSON.stringify({ query: text.trim() }),
       });
       if (!res.ok) {
         const data = (await res.json().catch(() => ({}))) as { error?: string };
@@ -41,6 +41,20 @@ export function SearchBar({ initialQuery = "" }: SearchBarProps) {
       setLoading(false);
     }
   }
+
+  async function onSubmit(e: FormEvent) {
+    e.preventDefault();
+    await runQuery(query);
+  }
+
+  useEffect(() => {
+    if (autoRanRef.current) return;
+    if (initialQuery && initialQuery.trim().length > 0) {
+      autoRanRef.current = true;
+      runQuery(initialQuery);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialQuery]);
 
   function runExample(text: string) {
     setQuery(text);

@@ -5,6 +5,8 @@ import { upsertUser } from "@/lib/db/users";
 const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.readonly";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Required for Auth.js on localhost and behind proxies; avoids generic "server configuration" errors.
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.AUTH_GOOGLE_ID,

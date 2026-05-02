@@ -132,6 +132,36 @@ export async function getEmailCountForUser(userId: string): Promise<number> {
   return count ?? 0;
 }
 
+/**
+ * Returns the subset of `gmailMessageIds` that already exist for the user.
+ * Used during sync to avoid re-fetching messages we already have.
+ */
+export async function getExistingGmailMessageIds(
+  userId: string,
+  gmailMessageIds: string[],
+): Promise<Set<string>> {
+  if (gmailMessageIds.length === 0) return new Set();
+  const supabase = getSupabaseAdmin();
+  const found = new Set<string>();
+  const CHUNK = 500;
+  for (let i = 0; i < gmailMessageIds.length; i += CHUNK) {
+    const slice = gmailMessageIds.slice(i, i + CHUNK);
+    const { data, error } = await supabase
+      .from("emails")
+      .select("gmail_message_id")
+      .eq("user_id", userId)
+      .in("gmail_message_id", slice);
+    if (error) {
+      console.error("getExistingGmailMessageIds failed", { userId, error: error.message });
+      throw new Error("Failed to look up existing message ids");
+    }
+    for (const row of (data as { gmail_message_id: string }[]) ?? []) {
+      found.add(row.gmail_message_id);
+    }
+  }
+  return found;
+}
+
 export async function getEmailsByGmailIds(
   userId: string,
   gmailMessageIds: string[],

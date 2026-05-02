@@ -1,18 +1,43 @@
 import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
+import {
+  ArrowLeft,
+  Archive,
+  Trash2,
+  AlertOctagon,
+  MailOpen,
+  Clock,
+  Tag,
+  MoreVertical,
+  Sparkles,
+} from "lucide-react";
 import { auth } from "@/lib/auth";
-import { Card, CardContent } from "@/components/ui/card";
-import { ThreadSummary } from "@/components/thread-summary";
+import { ThreadMessage } from "@/components/gmail/thread-message";
 import { cacheThreadSummary, getThreadWithEmails } from "@/lib/db/threads";
 import { summarizeThread } from "@/lib/llm";
-import { formatRelativeDate } from "@/lib/utils";
 
 export const dynamic = "force-dynamic";
+
+const KNOWN_LABEL_NAMES: Record<string, string> = {
+  INBOX: "Inbox",
+  IMPORTANT: "Important",
+  STARRED: "Starred",
+  SENT: "Sent",
+  DRAFT: "Draft",
+  SPAM: "Spam",
+  TRASH: "Trash",
+  CATEGORY_PERSONAL: "Personal",
+  CATEGORY_SOCIAL: "Social",
+  CATEGORY_PROMOTIONS: "Promotions",
+  CATEGORY_UPDATES: "Updates",
+  CATEGORY_FORUMS: "Forums",
+};
 
 export default async function ThreadDetailPage({ params }: { params: { id: string } }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
   const userId = session.user.id;
+  const ownerEmail = session.user.email ?? null;
   const threadId = params.id;
 
   const thread = await getThreadWithEmails(userId, threadId);
@@ -40,52 +65,108 @@ export default async function ThreadDetailPage({ params }: { params: { id: strin
     }
   }
 
+  const aggregateLabels = new Set<string>();
+  for (const email of thread.emails) {
+    for (const l of email.labels ?? []) aggregateLabels.add(l);
+  }
+  const visibleLabels = Array.from(aggregateLabels).filter(
+    (l) =>
+      KNOWN_LABEL_NAMES[l] &&
+      l !== "UNREAD" &&
+      l !== "STARRED",
+  );
+
+  const subject = thread.subject?.trim() || "(no subject)";
+  const messageCount = thread.emails.length;
+
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div className="space-y-2">
-        <Link href="/search" className="text-xs text-muted-foreground hover:underline">
-          ← Back to search
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div className="flex h-12 shrink-0 items-center gap-1 border-b px-2 text-[#5f6368]">
+        <Link
+          href="/inbox"
+          className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-[#f1f3f4]"
+          aria-label="Back to inbox"
+          title="Back to inbox"
+        >
+          <ArrowLeft className="h-4 w-4" />
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">
-          {thread.subject ?? "(no subject)"}
-        </h1>
-        <div className="text-xs text-muted-foreground">
-          {thread.message_count} messages · {thread.participant_emails.slice(0, 4).join(", ")}
-          {thread.participant_emails.length > 4 ? "…" : ""}
+        <ToolbarBtn icon={Archive} label="Archive" />
+        <ToolbarBtn icon={AlertOctagon} label="Report spam" />
+        <ToolbarBtn icon={Trash2} label="Delete" />
+        <span className="mx-1 h-5 w-px bg-[#dadce0]" />
+        <ToolbarBtn icon={MailOpen} label="Mark as unread" />
+        <ToolbarBtn icon={Clock} label="Snooze" />
+        <ToolbarBtn icon={Tag} label="Labels" />
+        <ToolbarBtn icon={MoreVertical} label="More" />
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-[940px] px-4 py-6">
+          <div className="flex items-start gap-3">
+            <h1 className="flex-1 text-2xl font-normal text-[#202124]">
+              {subject}{" "}
+              {messageCount > 1 && (
+                <span className="text-[#5f6368]">({messageCount})</span>
+              )}
+            </h1>
+          </div>
+          {visibleLabels.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {visibleLabels.map((l) => (
+                <span
+                  key={l}
+                  className="inline-flex items-center rounded-md border bg-[#f1f3f4] px-2 py-0.5 text-xs font-medium text-[#3c4043]"
+                >
+                  {KNOWN_LABEL_NAMES[l]}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {summary && (
+            <aside className="mt-5 rounded-2xl border bg-gradient-to-br from-[#eef4ff] via-[#f7f5ff] to-[#fef3ff] p-4 text-sm">
+              <div className="mb-1 flex items-center gap-2 text-xs font-medium text-[#0b57d0]">
+                <Sparkles className="h-3.5 w-3.5" />
+                Inbox AI summary
+              </div>
+              <p className="whitespace-pre-wrap leading-6 text-[#202124]">{summary}</p>
+            </aside>
+          )}
+
+          <div className="mt-6 space-y-3">
+            {thread.emails.map((email, i) => {
+              const isLast = i === thread.emails.length - 1;
+              return (
+                <ThreadMessage
+                  key={email.id}
+                  email={email}
+                  ownerEmail={ownerEmail}
+                  defaultOpen={isLast || messageCount === 1}
+                />
+              );
+            })}
+          </div>
         </div>
       </div>
-
-      {summary && <ThreadSummary summary={summary} />}
-
-      <div className="space-y-3">
-        {thread.emails.map((email, i) => (
-          <Card key={email.id}>
-            <CardContent className="space-y-2 p-5">
-              <div className="flex items-baseline justify-between gap-3 text-sm">
-                <div className="min-w-0">
-                  <div className="font-medium">
-                    {email.from_name ?? email.from_address ?? "Unknown sender"}
-                  </div>
-                  <div className="truncate text-xs text-muted-foreground">
-                    {email.from_address}
-                  </div>
-                </div>
-                <div className="shrink-0 text-xs text-muted-foreground">
-                  {formatRelativeDate(email.date)}
-                </div>
-              </div>
-              <pre className="whitespace-pre-wrap break-words font-sans text-sm leading-relaxed">
-                {email.body_text ?? "(empty)"}
-              </pre>
-              {i < thread.emails.length - 1 && (
-                <div className="border-t pt-2 text-[10px] uppercase tracking-wide text-muted-foreground">
-                  Reply
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
     </div>
+  );
+}
+
+function ToolbarBtn({
+  icon: Icon,
+  label,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      title={label}
+      aria-label={label}
+      className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-[#f1f3f4]"
+    >
+      <Icon className="h-4 w-4" />
+    </button>
   );
 }

@@ -18,6 +18,14 @@ export interface ListMessageIdsOpts {
   pageToken?: string;
   query?: string;
   maxResults?: number;
+  /**
+   * If true, includes messages in SPAM and TRASH. Gmail excludes them by default.
+   */
+  includeSpamTrash?: boolean;
+  /**
+   * Optional Gmail label filter (e.g. ["INBOX"]). Mutually compatible with `query`.
+   */
+  labelIds?: string[];
 }
 
 export async function listMessageIds(
@@ -29,6 +37,8 @@ export async function listMessageIds(
     q: opts.query,
     pageToken: opts.pageToken,
     maxResults: opts.maxResults ?? 500,
+    includeSpamTrash: opts.includeSpamTrash ?? false,
+    labelIds: opts.labelIds,
   });
   const ids = (res.data.messages ?? []).map((m) => m.id).filter((x): x is string => Boolean(x));
   return {
