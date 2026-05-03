@@ -119,6 +119,15 @@ export async function listHistory(
       for (const m of h.messagesDeleted ?? []) {
         if (m.message?.id) changes.push({ messageId: m.message.id, type: "deleted" });
       }
+      // Label changes — e.g. user moves a message between Gmail tabs, stars
+      // an email, or marks it as read. We re-fetch the message and upsert
+      // so our `labels` column (and the derived `category`) stay accurate.
+      for (const m of h.labelsAdded ?? []) {
+        if (m.message?.id) changes.push({ messageId: m.message.id, type: "labelChanged" });
+      }
+      for (const m of h.labelsRemoved ?? []) {
+        if (m.message?.id) changes.push({ messageId: m.message.id, type: "labelChanged" });
+      }
     }
     pageToken = res.data.nextPageToken ?? undefined;
   } while (pageToken);

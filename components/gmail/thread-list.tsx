@@ -31,6 +31,7 @@ export function ThreadList({
     approxTotal !== undefined ? `${start.toLocaleString()}–${end.toLocaleString()} of ${approxTotal.toLocaleString()}` : `${start}–${end}`;
   const hasPrev = page > 0;
   const hasNext = threads.length === pageSize;
+  const sep = basePath.includes("?") ? "&" : "?";
 
   return (
     <section className="flex min-h-0 flex-1 flex-col">
@@ -52,7 +53,7 @@ export function ThreadList({
         <div className="ml-auto flex items-center gap-1 text-xs">
           <span className="tabular-nums">{totalLabel}</span>
           <Link
-            href={hasPrev ? `${basePath}?p=${page - 1}` : "#"}
+            href={hasPrev ? `${basePath}${sep}p=${page - 1}` : "#"}
             aria-disabled={!hasPrev}
             className={`flex h-9 w-9 items-center justify-center rounded-full hover:bg-[#f1f3f4] ${hasPrev ? "" : "pointer-events-none opacity-40"}`}
             aria-label="Newer"
@@ -60,7 +61,7 @@ export function ThreadList({
             <ChevronLeft className="h-4 w-4" />
           </Link>
           <Link
-            href={hasNext ? `${basePath}?p=${page + 1}` : "#"}
+            href={hasNext ? `${basePath}${sep}p=${page + 1}` : "#"}
             aria-disabled={!hasNext}
             className={`flex h-9 w-9 items-center justify-center rounded-full hover:bg-[#f1f3f4] ${hasNext ? "" : "pointer-events-none opacity-40"}`}
             aria-label="Older"

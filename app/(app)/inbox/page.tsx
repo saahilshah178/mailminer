@@ -1,8 +1,9 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth";
 import { ThreadList } from "@/components/gmail/thread-list";
-import { listThreadsForLabel, getThreadLabelCounts } from "@/lib/db/inbox";
-import { DEFAULT_INBOX_VIEW } from "@/lib/inbox-labels";
+import { InboxTabs } from "@/components/gmail/inbox-tabs";
+import { getInboxTabCounts, listThreadsForTab } from "@/lib/db/inbox";
+import { type InboxTab } from "@/lib/inbox-labels";
 import { getUserById } from "@/lib/db/users";
 import { SyncBanner } from "@/components/gmail/sync-banner";
 
@@ -12,6 +13,11 @@ const PAGE_SIZE = 50;
 
 interface SearchParams {
   p?: string;
+  tab?: string;
+}
+
+function parseTab(raw: string | undefined): InboxTab {
+  return raw === "other" ? "other" : "primary";
 }
 
 export default async function InboxPage({
@@ -30,30 +36,49 @@ export default async function InboxPage({
   }
 
   const page = Math.max(0, parseInt(searchParams.p ?? "0", 10) || 0);
-  const view = DEFAULT_INBOX_VIEW;
+  const tab = parseTab(searchParams.tab);
 
-  const [threads, counts] = await Promise.all([
-    listThreadsForLabel(userId, {
-      label: view.gmailLabel,
+  const [threads, tabCounts] = await Promise.all([
+    listThreadsForTab(userId, tab, {
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
     }),
-    getThreadLabelCounts(userId).catch(() => []),
+    getInboxTabCounts(userId).catch(() => ({
+      primary_total: 0,
+      primary_unread: 0,
+      other_total: 0,
+      other_unread: 0,
+    })),
   ]);
 
-  const total = counts.find((c) => c.label === (view.gmailLabel ?? ""))?.total_count;
+  const total = tab === "other" ? tabCounts.other_total : tabCounts.primary_total;
+  const basePath = tab === "other" ? "/inbox?tab=other" : "/inbox";
+  const emptyTitle = tab === "other" ? "Other is empty" : "Primary is empty";
+  const emptyHint =
+    tab === "other"
+      ? "Anything Gmail didn't tag Important or Personal lands here."
+      : "Important threads and personal mail show up here.";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <SyncBanner status={user.sync_status} count={user.sync_progress_count} total={user.sync_progress_total} />
+      <SyncBanner
+        status={user.sync_status}
+        count={user.sync_progress_count}
+        total={user.sync_progress_total}
+      />
+      <InboxTabs
+        activeTab={tab}
+        primaryUnread={tabCounts.primary_unread}
+        otherUnread={tabCounts.other_unread}
+      />
       <ThreadList
         threads={threads}
         page={page}
         pageSize={PAGE_SIZE}
         approxTotal={total}
-        basePath="/inbox"
-        emptyTitle={`${view.title} is empty`}
-        emptyHint={view.emptyHint}
+        basePath={basePath}
+        emptyTitle={emptyTitle}
+        emptyHint={emptyHint}
       />
     </div>
   );

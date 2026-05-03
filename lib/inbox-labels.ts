@@ -1,3 +1,10 @@
+/**
+ * Inbox tabs surfaced at the top of `/inbox`. The actual category-set
+ * mapping lives in `@/lib/gmail-category` so the same definition is reused
+ * by both the Postgres RPCs and any client-side fallback code.
+ */
+export type InboxTab = "primary" | "other";
+
 export interface InboxView {
   /** URL slug (after /inbox/...) */
   slug: string;

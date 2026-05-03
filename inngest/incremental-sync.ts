@@ -51,11 +51,28 @@ export const incrementalSyncForUser = inngest.createFunction(
       const gmail = getGmailClient(refreshToken);
       if (!user.last_history_id) {
         const newHistory = await getCurrentHistoryId(gmail);
-        return { added: 0, deleted: 0, latestHistoryId: newHistory };
+        return { added: 0, deleted: 0, relabeled: 0, latestHistoryId: newHistory };
       }
       const { changes, latestHistoryId } = await listHistory(gmail, user.last_history_id);
-      const addedIds = Array.from(new Set(changes.filter((c) => c.type === "added").map((c) => c.messageId)));
-      const deletedIds = Array.from(new Set(changes.filter((c) => c.type === "deleted").map((c) => c.messageId)));
+      const addedIds = Array.from(
+        new Set(changes.filter((c) => c.type === "added").map((c) => c.messageId)),
+      );
+      const deletedIds = Array.from(
+        new Set(changes.filter((c) => c.type === "deleted").map((c) => c.messageId)),
+      );
+      // Re-fetch label-changed messages so their `labels` (and the derived
+      // `category` column) stay current. Skip ones that are already in the
+      // added/deleted sets — those are already covered.
+      const addedSet = new Set(addedIds);
+      const deletedSet = new Set(deletedIds);
+      const relabeledIds = Array.from(
+        new Set(
+          changes
+            .filter((c) => c.type === "labelChanged")
+            .map((c) => c.messageId)
+            .filter((id) => !addedSet.has(id) && !deletedSet.has(id)),
+        ),
+      );
 
       if (addedIds.length > 0) {
         const messages = await fetchMessagesInBatches(gmail, addedIds, 8);
@@ -76,6 +93,18 @@ export const incrementalSyncForUser = inngest.createFunction(
           await updateEmbeddings(userId, rows);
         }
       }
+      if (relabeledIds.length > 0) {
+        // Body / headers haven't changed, so we re-upsert (which refreshes
+        // `labels` → triggers regeneration of `category`) but skip the
+        // expensive embed step.
+        const messages = await fetchMessagesInBatches(gmail, relabeledIds, 8);
+        const parsed = messages
+          .map(parseGmailMessage)
+          .filter((p): p is NonNullable<typeof p> => Boolean(p));
+        if (parsed.length > 0) {
+          await bulkUpsertEmails(userId, parsed);
+        }
+      }
       if (deletedIds.length > 0) {
         await deleteEmailsByGmailIds(userId, deletedIds);
       }
@@ -83,11 +112,12 @@ export const incrementalSyncForUser = inngest.createFunction(
       return {
         added: addedIds.length,
         deleted: deletedIds.length,
+        relabeled: relabeledIds.length,
         latestHistoryId,
       };
     });
 
-    if (result.added > 0 || result.deleted > 0) {
+    if (result.added > 0 || result.deleted > 0 || result.relabeled > 0) {
       await step.run("rebuild-threads", async () => rebuildThreadsForUser(userId));
     }
     if (result.latestHistoryId) {
