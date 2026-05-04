@@ -14,18 +14,23 @@ export async function POST() {
   try {
     const user = await getUserById(userId);
     if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-    if (user.sync_status === "in_progress") {
-      return NextResponse.json({ ok: true, status: "in_progress" });
-    }
-    // Mark in_progress immediately so the UI flips off "complete" and the
-    // sidebar's banner appears. The Inngest function is the source of truth
-    // and will keep it in_progress as it pages.
+    // Allow a manual resync even when the previous run is stuck on
+    // `in_progress` (e.g. the dev process was killed mid-backfill before
+    // it could mark itself complete). Inngest dedupes via per-user
+    // concurrency, and `bulkUpsertEmails` is idempotent.
     await setSyncStatus(userId, "in_progress", { count: 0, total: 0 });
-    await inngest.send({
-      name: "app/sync.requested",
-      data: { userId, mode: "initial" },
-    });
-    console.info("sync.requested", { userId });
+    let sendOk = false;
+    let sendError: string | null = null;
+    try {
+      await inngest.send({
+        name: "app/sync.requested",
+        data: { userId, mode: "initial" },
+      });
+      sendOk = true;
+    } catch (err) {
+      sendError = (err as Error).message;
+    }
+    console.info("sync.requested", { userId, sendOk, sendError });
     return NextResponse.json({ ok: true, status: "in_progress" });
   } catch (err) {
     console.error("POST /api/sync failed", { userId, error: (err as Error).message });

@@ -135,9 +135,17 @@ export function SyncProgress({ stayOnComplete }: SyncProgressProps = {}) {
       )}
 
       {canTry && isWorking && (
-        <Link href="/inbox">
-          <Button variant="secondary">Open inbox now</Button>
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <Link href="/inbox">
+            <Button variant="secondary">Open inbox now</Button>
+          </Link>
+          <Button onClick={startSync} disabled={starting} variant="outline">
+            {starting ? "Restarting…" : "Restart sync"}
+          </Button>
+          <span className="text-xs text-[#5f6368]">
+            Use this if sync looks stuck — kicks off a fresh backfill.
+          </span>
+        </div>
       )}
 
       {error && <p className="text-sm text-destructive">{error}</p>}

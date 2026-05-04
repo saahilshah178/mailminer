@@ -9,16 +9,37 @@ import type { Email, Thread, ThreadWithEmails } from "@/types";
 export async function rebuildThreadsForUser(userId: string): Promise<void> {
   const supabase = getSupabaseAdmin();
 
-  // Pull all emails for the user (id-only is enough for grouping). For very
-  // large mailboxes this would want server-side aggregation; at MVP scale
-  // (a couple years of mail) it's fine.
-  const { data: rows, error } = await supabase
-    .from("emails")
-    .select("thread_id, subject, from_address, date")
-    .eq("user_id", userId);
-  if (error) {
-    console.error("rebuildThreadsForUser select failed", { userId, error: error.message });
-    throw new Error("Failed to load emails for thread aggregation");
+  // Pull all emails for the user (id-only is enough for grouping). PostgREST
+  // / Supabase silently caps a single `.select()` at 1,000 rows, so for
+  // larger mailboxes we have to paginate explicitly via `.range()`.
+  type EmailRow = {
+    thread_id: string;
+    subject: string | null;
+    from_address: string | null;
+    date: string | null;
+  };
+  const PAGE = 1000;
+  const rows: EmailRow[] = [];
+  let offset = 0;
+  while (true) {
+    const { data, error } = await supabase
+      .from("emails")
+      .select("thread_id, subject, from_address, date")
+      .eq("user_id", userId)
+      .order("id", { ascending: true })
+      .range(offset, offset + PAGE - 1);
+    if (error) {
+      console.error("rebuildThreadsForUser select failed", {
+        userId,
+        offset,
+        error: error.message,
+      });
+      throw new Error("Failed to load emails for thread aggregation");
+    }
+    if (!data || data.length === 0) break;
+    rows.push(...(data as EmailRow[]));
+    if (data.length < PAGE) break;
+    offset += PAGE;
   }
 
   type Group = {

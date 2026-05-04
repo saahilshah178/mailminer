@@ -38,7 +38,7 @@ export default async function InboxPage({
   const page = Math.max(0, parseInt(searchParams.p ?? "0", 10) || 0);
   const tab = parseTab(searchParams.tab);
 
-  const [threads, tabCounts] = await Promise.all([
+  const [initialThreads, tabCounts] = await Promise.all([
     listThreadsForTab(userId, tab, {
       limit: PAGE_SIZE,
       offset: page * PAGE_SIZE,
@@ -51,8 +51,12 @@ export default async function InboxPage({
     })),
   ]);
 
-  const total = tab === "other" ? tabCounts.other_total : tabCounts.primary_total;
   const basePath = tab === "other" ? "/inbox?tab=other" : "/inbox";
+  const threads = initialThreads;
+  // `inbox_tab_counts` and `thread_list_filtered` operate over the same
+  // fully-populated set (latest INBOX message per thread), so the count RPC
+  // is the source of truth for pagination totals.
+  const total = tab === "other" ? tabCounts.other_total : tabCounts.primary_total;
   const emptyTitle = tab === "other" ? "Other is empty" : "Primary is empty";
   const emptyHint =
     tab === "other"
