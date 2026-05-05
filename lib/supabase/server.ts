@@ -10,8 +10,8 @@ import { cookies } from "next/headers";
  * RLS uses `auth.uid()` only when a Supabase JWT is present. Server-side
  * trusted writes go through `getSupabaseAdmin()` instead.
  */
-export function getSupabaseServer() {
-  const cookieStore = cookies();
+export async function getSupabaseServer() {
+  const cookieStore = await cookies();
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !anonKey) {

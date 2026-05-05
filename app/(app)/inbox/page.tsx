@@ -23,7 +23,7 @@ function parseTab(raw: string | undefined): InboxTab {
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: SearchParams;
+  searchParams: Promise<SearchParams>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
@@ -35,8 +35,9 @@ export default async function InboxPage({
     redirect("/sync");
   }
 
-  const page = Math.max(0, parseInt(searchParams.p ?? "0", 10) || 0);
-  const tab = parseTab(searchParams.tab);
+  const sp = await searchParams;
+  const page = Math.max(0, parseInt(sp.p ?? "0", 10) || 0);
+  const tab = parseTab(sp.tab);
 
   const [initialThreads, tabCounts] = await Promise.all([
     listThreadsForTab(userId, tab, {

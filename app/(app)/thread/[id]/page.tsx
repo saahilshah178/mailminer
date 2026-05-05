@@ -33,12 +33,16 @@ const KNOWN_LABEL_NAMES: Record<string, string> = {
   CATEGORY_FORUMS: "Forums",
 };
 
-export default async function ThreadDetailPage({ params }: { params: { id: string } }) {
+export default async function ThreadDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
   const userId = session.user.id;
   const ownerEmail = session.user.email ?? null;
-  const threadId = params.id;
+  const { id: threadId } = await params;
 
   const thread = await getThreadWithEmails(userId, threadId);
   if (!thread) notFound();

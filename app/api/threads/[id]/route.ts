@@ -3,13 +3,16 @@ import { auth } from "@/lib/auth";
 import { cacheThreadSummary, getThreadWithEmails } from "@/lib/db/threads";
 import { summarizeThread } from "@/lib/llm";
 
-export async function GET(_req: Request, ctx: { params: { id: string } }) {
+export async function GET(
+  _req: Request,
+  ctx: { params: Promise<{ id: string }> },
+) {
   const session = await auth();
   if (!session?.user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const userId = session.user.id;
-  const threadId = ctx.params.id;
+  const { id: threadId } = await ctx.params;
 
   try {
     const thread = await getThreadWithEmails(userId, threadId);

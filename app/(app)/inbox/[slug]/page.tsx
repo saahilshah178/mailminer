@@ -18,14 +18,15 @@ export default async function LabelPage({
   params,
   searchParams,
 }: {
-  params: { slug: string };
-  searchParams: SearchParams;
+  params: Promise<{ slug: string }>;
+  searchParams: Promise<SearchParams>;
 }) {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
   const userId = session.user.id;
 
-  const view = getInboxView(params.slug);
+  const { slug } = await params;
+  const view = getInboxView(slug);
   if (!view) notFound();
 
   const user = await getUserById(userId);
@@ -34,7 +35,8 @@ export default async function LabelPage({
     redirect("/sync");
   }
 
-  const page = Math.max(0, parseInt(searchParams.p ?? "0", 10) || 0);
+  const sp = await searchParams;
+  const page = Math.max(0, parseInt(sp.p ?? "0", 10) || 0);
 
   const [threads, counts] = await Promise.all([
     view.gmailLabel

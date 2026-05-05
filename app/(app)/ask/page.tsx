@@ -10,7 +10,11 @@ interface SearchParams {
   q?: string;
 }
 
-export default async function AskPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function AskPage({
+  searchParams,
+}: {
+  searchParams: Promise<SearchParams>;
+}) {
   const session = await auth();
   if (!session?.user?.id) redirect("/");
   const userId = session.user.id;
@@ -20,6 +24,8 @@ export default async function AskPage({ searchParams }: { searchParams: SearchPa
   if (user.sync_status === "pending" || user.sync_status === "failed") {
     redirect("/sync");
   }
+
+  const { q } = await searchParams;
 
   return (
     <div className="mx-auto w-full max-w-3xl overflow-y-auto px-6 py-10">
@@ -36,7 +42,7 @@ export default async function AskPage({ searchParams }: { searchParams: SearchPa
         Plain-English questions only. We&apos;ll search your mail and cite the messages we used.
       </p>
       <div className="mt-8">
-        <SearchBar initialQuery={searchParams.q ?? ""} />
+        <SearchBar initialQuery={q ?? ""} />
       </div>
     </div>
   );

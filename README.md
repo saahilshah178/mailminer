@@ -71,6 +71,30 @@ npm run inngest:dev
 
 Visit http://localhost:3000.
 
+## Deploying to Vercel
+
+1. Push the repo to GitHub and import it into [vercel.com](https://vercel.com/new).
+2. In **Project Settings → Environment Variables**, add every key from
+   `.env.example` (production scope, and preview if you use preview deploys).
+   - Skip `NEXTAUTH_URL` and `AUTH_URL`. Auth.js v5 picks up the host from
+     `VERCEL_URL` because `trustHost: true` is set in `lib/auth.ts`.
+   - `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` are required in production
+     (sign up at [inngest.com](https://www.inngest.com) and connect the Vercel
+     integration so background jobs run).
+   - `ENCRYPTION_KEY` must be the **same value** you used locally if you've
+     already encrypted refresh tokens in Supabase, otherwise existing tokens
+     can't be decrypted. Generate a fresh one (`openssl rand -hex 32`) for a
+     clean Supabase project.
+3. Add your production domain to Google Cloud Console as an authorized redirect
+   URI: `https://<your-vercel-domain>/api/auth/callback/google`.
+4. Add your production domain to the Google OAuth consent screen's authorized
+   domains, and (while in Testing mode) add yourself as a test user.
+5. Deploy. The first request to `/` will trigger Auth.js setup; signing in
+   should redirect to `/inbox`.
+
+`npm run build` followed by `npm run start` reproduces exactly what Vercel
+serves — use it to debug production-only issues locally.
+
 ## Project layout
 
 ```
