@@ -48,7 +48,19 @@ export function SyncProgress({ stayOnComplete }: SyncProgressProps = {}) {
     setError(null);
     try {
       const res = await fetch("/api/sync", { method: "POST" });
-      if (!res.ok) throw new Error("Failed to start sync");
+      if (!res.ok) {
+        // Surface the server's actual error so the user sees *why* the
+        // sync didn't start (e.g. Inngest worker unreachable) instead
+        // of a generic "Failed to start sync".
+        let serverMessage = "Failed to start sync";
+        try {
+          const body = (await res.json()) as { error?: string; detail?: string };
+          if (body?.error) serverMessage = body.error;
+        } catch {
+          // ignore: response wasn't JSON
+        }
+        throw new Error(serverMessage);
+      }
       // Optimistically reflect the kicked-off state.
       setStatus((prev) =>
         prev

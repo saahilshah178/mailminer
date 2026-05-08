@@ -19,18 +19,36 @@ export async function POST() {
     // it could mark itself complete). Inngest dedupes via per-user
     // concurrency, and `bulkUpsertEmails` is idempotent.
     await setSyncStatus(userId, "in_progress", { count: 0, total: 0 });
-    let sendOk = false;
-    let sendError: string | null = null;
     try {
       await inngest.send({
         name: "app/sync.requested",
         data: { userId, mode: "initial" },
       });
-      sendOk = true;
     } catch (err) {
-      sendError = (err as Error).message;
+      // Inngest is unreachable (e.g. dev server isn't running, or the
+      // event key is invalid in prod). Roll the status back so the UI
+      // doesn't hang on "in_progress" forever, and surface a clear,
+      // actionable error to the client instead of returning ok.
+      const detail = (err as Error).message;
+      console.error("sync.requested.send_failed", { userId, error: detail });
+      try {
+        await setSyncStatus(userId, "failed");
+      } catch (rollbackErr) {
+        console.error("sync.requested.rollback_failed", {
+          userId,
+          error: (rollbackErr as Error).message,
+        });
+      }
+      return NextResponse.json(
+        {
+          error:
+            "Could not enqueue sync: the background worker is unreachable. Make sure the Inngest dev server is running (`npx inngest-cli@latest dev`) and try again.",
+          detail,
+        },
+        { status: 503 },
+      );
     }
-    console.info("sync.requested", { userId, sendOk, sendError });
+    console.info("sync.requested", { userId, sendOk: true });
     return NextResponse.json({ ok: true, status: "in_progress" });
   } catch (err) {
     console.error("POST /api/sync failed", { userId, error: (err as Error).message });
