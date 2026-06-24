@@ -1,134 +1,110 @@
 # Inbox AI
 
-Ask your inbox anything. A web app that connects to Gmail and lets you ask natural-language questions about your email history, with AI-generated thread summaries.
+**Read your email like Gmail. Ask it like ChatGPT.**
 
-## Stack
+Inbox AI connects to your Gmail account, mirrors your inbox so it feels familiar,
+and lets you ask questions about your email in plain English — getting back real
+answers with links to the exact messages they came from.
 
-- **Frontend / Backend**: Next.js 14 (App Router) + TypeScript + Tailwind + shadcn/ui
-- **Database**: Supabase Postgres + `pgvector`
-- **Auth**: NextAuth.js v5 (Auth.js) with Google OAuth
-- **LLM**: Anthropic Claude (Sonnet for synthesis, Haiku for filter extraction)
-- **Embeddings**: OpenAI `text-embedding-3-small`
-- **Background jobs**: Inngest
-- **Hosting**: Vercel
+No more digging through search operators or scrolling for that one email from
+three months ago. Just ask.
 
-## Setup
+---
 
-### 1. Install dependencies
+## What you can do
 
-```bash
-npm install
-```
+### 📥 Browse your inbox
+Your mail, laid out like Gmail. Threads are split into **Primary** and **Other**
+so the important stuff isn't buried under newsletters and receipts. Unread counts,
+full thread view, and the latest message always on top.
 
-### 2. Provision services
+### 💬 Ask anything
+Open **Ask AI** and type a question the way you'd ask a person:
 
-#### Supabase
-1. Create a project at [supabase.com](https://supabase.com).
-2. In SQL editor, enable `pgvector`: `create extension if not exists vector;` (also done by migrations).
-3. Link the local CLI: `npx supabase link --project-ref <your-ref>`.
-4. Push migrations: `npm run db:push`.
+> *"What did the contractor quote me for the kitchen?"*
+> *"When is my flight to Lisbon and what's the confirmation number?"*
+> *"Summarize everything from my landlord this year."*
+> *"Did I ever reply to Sarah about the contract?"*
 
-#### Google Cloud / Gmail OAuth
-1. Create a project in [Google Cloud Console](https://console.cloud.google.com).
-2. Enable the **Gmail API**.
-3. Create OAuth 2.0 credentials (Web application).
-   - Authorized redirect URI: `http://localhost:3000/api/auth/callback/google` (and your prod URL).
-4. While in **Testing** mode, add your Google account email under "Test users" (max 100).
+Inbox AI searches your entire mail history, writes a direct answer, and **cites
+the messages it used** — click any citation to jump straight to the original
+email.
 
-#### Inngest
-1. For local dev, run `npx inngest-cli@latest dev` in a second terminal — no account needed.
-2. For production, sign up at [inngest.com](https://www.inngest.com), create an app, and copy the event key + signing key.
+### 📝 Instant thread summaries
+Long back-and-forth thread? Open it and get an AI summary of what happened and
+where it landed, without reading all 40 replies.
 
-#### Anthropic + OpenAI
-- Get keys from [console.anthropic.com](https://console.anthropic.com) and [platform.openai.com](https://platform.openai.com).
+---
 
-### 3. Environment
+## Getting started
 
-```bash
-cp .env.example .env.local
-```
+1. **Open the app** and click **Sign in with Google**.
+2. **Grant read-only access** to Gmail. Inbox AI can *read* your mail to answer
+   questions — it can't send, delete, or change anything.
+3. **Wait for the first sync.** On your first sign-in, Inbox AI imports your mail
+   so it can search it. You'll see a progress screen — this is a one-time setup
+   and takes a few minutes depending on inbox size. After that, new mail syncs
+   automatically.
+4. **Start asking.** Once sync finishes you land in your inbox. Hit **Ask AI**
+   and go.
 
-Generate the secrets:
+---
 
-```bash
-openssl rand -base64 32   # AUTH_SECRET
-openssl rand -hex 32      # ENCRYPTION_KEY
-```
+## Tips for better answers
 
-Fill in every value in `.env.local`.
+- **Be specific about *who* or *what*.** "What's the dentist's address?" beats
+  "where's that appointment."
+- **Ask for the detail you actually want** — a date, an amount, a confirmation
+  number, a yes/no. Inbox AI pulls the specific fact, not just the email.
+- **Use it to catch up.** "Summarize everything from my accountant in the last
+  month" is a great way to get back up to speed.
+- **Trust but verify.** Every answer cites its sources — click through to confirm
+  anything important.
 
-### 4. Run
+---
 
-In two terminals:
+## Your privacy
 
-```bash
-npm run dev
-```
+- **Read-only.** Inbox AI requests read-only Gmail access. It cannot send,
+  delete, or modify your email.
+- **Your data is yours.** Your email is only ever used to answer *your* questions.
+  It is never shared, sold, or used to train models.
+- **Encrypted access.** Your Google sign-in credentials are encrypted before
+  they're stored.
+- **Isolated.** You can only ever see your own mail — accounts are strictly
+  separated at the database level.
+- **Email content is never logged.**
 
-```bash
-npm run inngest:dev
-```
+---
 
-Visit http://localhost:3000.
+## FAQ
 
-## Deploying to Vercel
+**Does it send or delete email?**
+No. Access is read-only by design.
 
-1. Push the repo to GitHub and import it into [vercel.com](https://vercel.com/new).
-2. In **Project Settings → Environment Variables**, add every key from
-   `.env.example` (production scope, and preview if you use preview deploys).
-   - Skip `NEXTAUTH_URL` and `AUTH_URL`. Auth.js v5 picks up the host from
-     `VERCEL_URL` because `trustHost: true` is set in `lib/auth.ts`.
-   - `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` are required in production
-     (sign up at [inngest.com](https://www.inngest.com) and connect the Vercel
-     integration so background jobs run).
-   - `ENCRYPTION_KEY` must be the **same value** you used locally if you've
-     already encrypted refresh tokens in Supabase, otherwise existing tokens
-     can't be decrypted. Generate a fresh one (`openssl rand -hex 32`) for a
-     clean Supabase project.
-3. Add your production domain to Google Cloud Console as an authorized redirect
-   URI: `https://<your-vercel-domain>/api/auth/callback/google`.
-4. Add your production domain to the Google OAuth consent screen's authorized
-   domains, and (while in Testing mode) add yourself as a test user.
-5. Deploy. The first request to `/` will trigger Auth.js setup; signing in
-   should redirect to `/inbox`.
+**Why did the first sign-in take a while?**
+The first sync imports your mail history so questions can search across
+everything. It only happens once; after that, updates are incremental.
 
-`npm run build` followed by `npm run start` reproduces exactly what Vercel
-serves — use it to debug production-only issues locally.
+**How fresh are the answers?**
+New mail syncs automatically after the initial import, so answers reflect your
+recent inbox.
 
-## Project layout
+**It said I'm not an authorized test user — what gives?**
+The app may be running in Google's "Testing" mode, which limits access to a list
+of approved accounts. Ask whoever runs your instance to add your Google address.
 
-```
-app/
-  api/
-    auth/[...nextauth]/   NextAuth handlers
-    sync/                 Start sync (POST), poll status (GET)
-    search/               Query endpoint
-    threads/[id]/         Thread detail + lazy summary
-    feedback/             Thumbs up/down on answers
-    inngest/              Inngest serve handler
-  (app)/                  Authenticated app routes
-    search/               Main search page
-    sync/                 First-time sync progress
-    thread/[id]/          Thread detail page
-  page.tsx                Landing
-lib/
-  db/                     Supabase queries (always include user_id)
-  gmail.ts                Gmail API wrapper
-  llm.ts                  Claude wrapper
-  embeddings.ts           OpenAI embeddings wrapper
-  encryption.ts           AES-256-GCM for refresh tokens
-  email-parser.ts         MIME -> clean text
-inngest/                  Background sync functions
-supabase/migrations/      Schema, RLS, RPC
-```
+**Can I use a non-Gmail account?**
+Not yet — Gmail only for now.
 
-## Security
+---
 
-- Refresh tokens are encrypted at rest with AES-256-GCM before insertion.
-- Every table has Row Level Security; users can only read their own data.
-- API routes Zod-validate input and gate on `auth()`.
-- Email body content is **never** logged — only metadata (message ID, user ID, action).
+## Running your own instance
 
-## Out of scope (MVP)
+Inbox AI is a Next.js app you can self-host. For full setup — Supabase, Google
+OAuth, Inngest, API keys, and Vercel deployment — see
+**[docs/SELF_HOSTING.md](docs/SELF_HOSTING.md)**.
 
-Email composition, multi-provider, mobile, team features, browser extension. See product doc.
+**Tech stack:** Next.js 14 (App Router) · TypeScript · Tailwind + shadcn/ui ·
+Supabase Postgres + pgvector · Auth.js (Google OAuth) · Anthropic Claude ·
+OpenAI embeddings · Inngest · Vercel.
